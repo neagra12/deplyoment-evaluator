@@ -10,6 +10,7 @@ Built with **FastAPI + LangGraph** on the backend and **Next.js** on the fronten
 
 | Feature | Description |
 |---|---|
+| **PDF Upload** | Upload any PDF shop manual directly from the browser — parsed, chunked, embedded, and indexed in seconds |
 | **Product Expert QA** | Ask any technical question; the agent retrieves relevant manual chunks and returns a grounded answer with confidence score and page citation |
 | **Guided Troubleshooting** | Step-by-step diagnostic decision tree grounded in manual pages — walks a technician through failure modes with confidence-weighted branches |
 | **Eval Harness** | Auto-generates ground-truth questions from the manual, runs the QA agent over all of them, and scores on coverage, retrieval accuracy, citation accuracy, hallucination rate, and groundedness |
@@ -140,7 +141,7 @@ prox-challenge/
 └── frontend/
     ├── .env.local              # NEXT_PUBLIC_API_URL=http://localhost:8001
     ├── app/
-    │   ├── page.tsx            # QA page (/)
+    │   ├── page.tsx            # QA page (/) — includes PDF upload UI
     │   ├── eval/page.tsx       # Eval Harness (/eval)
     │   ├── dashboard/page.tsx  # Rollout Simulator (/dashboard)
     │   └── troubleshoot/page.tsx # Guided Troubleshooting (/troubleshoot)
@@ -199,31 +200,37 @@ Open: http://localhost:3000
 
 ### Step 1 — Ingest a Manual
 
-Before you can ask questions, ingest a PDF shop manual via the backend API. There is no frontend UI for ingestion — use one of the following methods:
+Navigate to http://localhost:3000
 
-**Option A — File path on the server**
+If no manual has been ingested yet, the upload form appears automatically. If manuals already exist, click **+ Upload another** in the Manual panel.
+
+1. Click **Choose File** and select a PDF shop manual
+2. Optionally fill in **Title** and **Equipment type**
+3. Click **Upload & Ingest**
+
+The status line will confirm how many pages and chunks were indexed. The new manual is automatically selected and ready to query.
+
+**Alternative — curl**
+
 ```bash
+# Upload via multipart
+curl -X POST "http://localhost:8001/ingest/upload?title=Honda+Generator+E/ES3500&equipment_type=generator" \
+  -F "file=@/path/to/manual.pdf"
+
+# Or ingest from a server-side file path
 curl -X POST http://localhost:8001/ingest/path \
   -H "Content-Type: application/json" \
   -d '{"filepath": "/absolute/path/to/manual.pdf", "title": "Honda Generator E/ES3500", "equipment_type": "generator"}'
 ```
 
-**Option B — File upload**
-```bash
-curl -X POST http://localhost:8001/ingest/upload \
-  -F "file=@/path/to/manual.pdf" \
-  -F "title=Honda Generator E/ES3500" \
-  -F "equipment_type=generator"
-```
+**Alternative — Swagger UI**
 
-**Option C — Swagger UI**
+Go to http://localhost:8001/docs → `/ingest/upload` → **Try it out**.
 
-Go to http://localhost:8001/docs → find `/ingest/upload` → click **Try it out** → upload your PDF.
-
-The backend will:
-1. Parse the PDF into text chunks (PyMuPDF)
-2. Generate OpenAI embeddings for each chunk
-3. Store everything in `data/prox.db`
+Under the hood, the backend will:
+1. Parse the PDF into overlapping text chunks (PyMuPDF, 400-char chunks / 80-char overlap)
+2. Generate OpenAI embeddings for each chunk (`text-embedding-3-small`)
+3. Store everything in `data/prox.db` — duplicate uploads are detected by SHA-256 checksum and skipped
 
 ---
 
