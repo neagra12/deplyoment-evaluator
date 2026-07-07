@@ -41,6 +41,74 @@ Seed five simulated dealerships and run evals on each to compare performance acr
 
 ---
 
+## The PDF — Which Manual & How It's Used
+
+### Which manual
+
+The project ships pre-loaded with the **Honda Generator E/ES3500 Shop Manual** (47 pages). This is the manual visible in the QA screenshot and the one the troubleshooting decision tree is grounded in. Any PDF shop manual can be ingested in its place.
+
+### How the PDF flows through the system
+
+```
+PDF file
+   │
+   ▼
+PyMuPDF (fitz)
+   │  Extracts raw text page-by-page
+   │  Detects section headers (ALL-CAPS lines, numbered headings)
+   │
+   ▼
+Chunker  (ingestion/pdf_parser.py)
+   │  Splits each page into overlapping chunks
+   │  chunk_size = 400 characters, overlap = 80 characters
+   │  Each chunk stores: page_number, section_header, text, token_count
+   │
+   ▼
+OpenAI text-embedding-3-small  (ingestion/embeddings.py)
+   │  Embeds every chunk in batches of 100
+   │  Returns float32 vectors
+   │
+   ▼
+SQLite  (data/prox.db)
+   │  Chunks + embeddings stored as BLOBs
+   │  Tables: manuals, chunks (with embedding column)
+   │
+   ▼  ── at query time ──
+   │
+   ▼
+Retrieval  (agent/retrieval.py)
+   │  Embeds the user's question with the same model
+   │  Computes cosine similarity against all stored chunk vectors
+   │  Returns top-k most relevant chunks with their page numbers
+   │
+   ▼
+LangGraph QA Agent  (agent/qa_agent.py)
+   │  3-node graph: retrieve → generate → [escalate | END]
+   │  GPT-4o receives the retrieved chunks as context
+   │  Prompted to answer ONLY from provided passages — never from training data
+   │  Returns: answer, confidence (0–1), cited_page, escalation_reason
+   │
+   ▼
+Confidence check
+   │  confidence ≥ 0.65  →  return grounded answer + page citation
+   └  confidence < 0.65  →  escalate with reason + suggested next step
+```
+
+### Confidence calibration
+
+| Score | Meaning |
+|---|---|
+| 0.90+ | Answer stated explicitly and completely in the retrieved passages |
+| 0.70–0.89 | Answer clearly implied or reliably inferred |
+| 0.50–0.69 | Answer requires interpretation or passages are incomplete |
+| below 0.50 | Cannot be reliably determined — escalates automatically |
+
+### Why overlapping chunks?
+
+The 80-character overlap between consecutive chunks ensures that sentences split across chunk boundaries are still fully represented in at least one chunk, preventing the retriever from missing answers that straddle a split point.
+
+---
+
 ## Project Structure
 
 ```
