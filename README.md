@@ -199,15 +199,26 @@ Open: http://localhost:3000
 
 ### Step 1 — Ingest a Manual
 
-Before you can ask questions, ingest a PDF shop manual via the API:
+Before you can ask questions, ingest a PDF shop manual via the backend API. There is no frontend UI for ingestion — use one of the following methods:
 
+**Option A — File path on the server**
 ```bash
 curl -X POST http://localhost:8001/ingest/path \
   -H "Content-Type: application/json" \
   -d '{"filepath": "/absolute/path/to/manual.pdf", "title": "Honda Generator E/ES3500", "equipment_type": "generator"}'
 ```
 
-Or use the `/ingest/upload` endpoint to upload a file directly.
+**Option B — File upload**
+```bash
+curl -X POST http://localhost:8001/ingest/upload \
+  -F "file=@/path/to/manual.pdf" \
+  -F "title=Honda Generator E/ES3500" \
+  -F "equipment_type=generator"
+```
+
+**Option C — Swagger UI**
+
+Go to http://localhost:8001/docs → find `/ingest/upload` → click **Try it out** → upload your PDF.
 
 The backend will:
 1. Parse the PDF into text chunks (PyMuPDF)
